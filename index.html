@@ -3,40 +3,43 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SaaS Cost Comparison</title>
+  <title>Cost Comparison Tool</title>
   <style>
     body { font-family: sans-serif; padding: 2rem; }
-    input[type="number"] { width: 80px; }
+    input[type="number"], input[type="text"] { width: 180px; }
+    #toolInput { width: 275px; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
-    .row-inputs { display: flex; gap: 1rem; margin-bottom: 1rem; }
-    .sliders { display: flex; gap: 2rem; margin-bottom: 1rem; }
-    .sliders label { display: flex; flex-direction: column; }
+    .row-inputs { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .controls { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; align-items: flex-end; }
+    .controls label { display: flex; flex-direction: column; }
     .remove-btn { cursor: pointer; color: red; }
     .info { margin-bottom: 1.5rem; color: #333; font-size: 0.95rem; }
   </style>
 </head>
 <body>
-  <h1>SaaS Cost Comparison</h1>
-
+  <h1>Cost Comparison Tool</h1>
   <div class="info">
-    Use the sliders to set the number of users and any discount you expect to apply. Add tools and their per-user monthly base price below to build a comparison table. The data will update automatically, and you can share the table using the URL.
+    Set the quantity and any discount you expect to apply. "Quantity" can represent users, parallel sessions, minutes, pages, or any relevant scaling factor depending on the service. Add tools and their base price below to build a comparison table. The data updates automatically, and you can share the table via the URL.
   </div>
 
-  <div class="sliders">
+  <div class="controls">
     <label>
-      Number of Users<span id="userCountLabel">100</span>
-      <input type="range" id="userCount" min="1" max="1000" value="10">
+      Quantity: <span id="quantityCountLabel">100</span>
+      <input type="range" id="quantityCount" min="1" max="500" value="100">
     </label>
     <label>
-      Discount<span id="discountLabel">0%</span>
+      Discount: <span id="discountLabel">0%</span>
       <input type="range" id="discount" min="0" max="100" value="0">
+    </label>
+    <label>
+      <input type="text" id="unitInput" placeholder="Unit (e.g. users, minutes)">
     </label>
   </div>
 
   <div class="row-inputs">
     <input type="text" id="toolInput" placeholder="Tool & Tier">
-    <input type="number" id="basePriceInput" min="0" placeholder="Base Price">
+    <input type="number" id="basePriceInput" min="0" placeholder="Base Price ($)">
     <button onclick="addRow()">Add</button>
   </div>
 
@@ -55,12 +58,13 @@
   <script>
     let tools = [];
 
-    const userCountInput = document.getElementById("userCount");
+    const quantityCountInput = document.getElementById("quantityCount");
     const discountInput = document.getElementById("discount");
+    const unitInput = document.getElementById("unitInput");
     const tableBody = document.getElementById("pricingTableBody");
 
     function updateLabels() {
-      document.getElementById("userCountLabel").textContent = userCountInput.value;
+      document.getElementById("quantityCountLabel").textContent = quantityCountInput.value;
       document.getElementById("discountLabel").textContent = discountInput.value + "%";
     }
 
@@ -80,16 +84,16 @@
     }
 
     function renderTable() {
-      const userCount = parseInt(userCountInput.value);
+      const quantityCount = parseInt(quantityCountInput.value);
       const discount = parseInt(discountInput.value);
 
       tableBody.innerHTML = tools.map((item, i) => {
         const discountedPrice = item.basePrice * (1 - discount / 100);
-        const monthlyCost = (discountedPrice * userCount).toFixed(2);
+        const monthlyCost = (discountedPrice * quantityCount).toFixed(2);
         const yearlyCost = (monthlyCost * 12).toFixed(2);
         return `
           <tr>
-            <td>${item.tool} ($${item.basePrice.toFixed(2)} → $${discountedPrice.toFixed(2)} per user/month)</td>
+            <td>${item.tool} ($${item.basePrice.toFixed(2)} → $${discountedPrice.toFixed(2)} per ${unitInput.value || "unit"}/month)</td>
             <td>$${monthlyCost}</td>
             <td>$${yearlyCost}</td>
             <td><span class="remove-btn" onclick="removeRow(${i})">Remove</span></td>
@@ -101,8 +105,9 @@
     function updateURL() {
       const params = {
         tools,
-        users: userCountInput.value,
-        discount: discountInput.value
+        quantity: quantityCountInput.value,
+        discount: discountInput.value,
+        unit: unitInput.value
       };
       const encoded = btoa(encodeURIComponent(JSON.stringify(params)));
       history.replaceState(null, "", `?data=${encoded}`);
@@ -115,16 +120,18 @@
         try {
           const decoded = JSON.parse(decodeURIComponent(atob(data)));
           if (decoded.tools) tools = decoded.tools;
-          if (decoded.users) userCountInput.value = decoded.users;
+          if (decoded.quantity) quantityCountInput.value = decoded.quantity;
           if (decoded.discount) discountInput.value = decoded.discount;
+          if (decoded.unit) unitInput.value = decoded.unit;
         } catch (e) { console.error("Error parsing data", e); }
       }
       updateLabels();
       renderTable();
     }
 
-    userCountInput.addEventListener("input", () => { updateLabels(); renderTable(); updateURL(); });
+    quantityCountInput.addEventListener("input", () => { updateLabels(); renderTable(); updateURL(); });
     discountInput.addEventListener("input", () => { updateLabels(); renderTable(); updateURL(); });
+    unitInput.addEventListener("input", () => { updateLabels(); renderTable(); updateURL(); });
 
     loadFromURL();
   </script>
