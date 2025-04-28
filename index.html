@@ -94,8 +94,8 @@
         return `
           <tr>
             <td>${item.tool} ($${item.basePrice.toFixed(2)} → $${discountedPrice.toFixed(2)} per ${unitInput.value || "unit"}/month)</td>
-            <td>$${monthlyCost}</td>
-            <td>$${yearlyCost}</td>
+            <td>$${Number(monthlyCost).toLocaleString()}</td>
+            <td>$${Number(yearlyCost).toLocaleString()}</td>
             <td><span class="remove-btn" onclick="removeRow(${i})">Remove</span></td>
           </tr>
         `;
