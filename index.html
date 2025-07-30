@@ -23,7 +23,11 @@
     Set the quantity and any discount you expect to apply. "Quantity" can represent users, parallel sessions, minutes, pages, or any relevant scaling factor depending on the service. Add tools and their base price below to build a comparison table. The data updates automatically, and you can share the table via the URL.
   </div>
 
-  <div class="controls">
+  <div style="margin-bottom: 1rem;">
+    <button id="modeToggleBtn" type="button">Switch to Projection Mode</button>
+  </div>
+
+  <div class="controls" id="globalControls">
     <label>
       Quantity: <span id="quantityCountLabel">100</span>
       <input type="range" id="quantityCount" min="1" max="500" value="100">
@@ -47,16 +51,19 @@
     <thead>
       <tr>
         <th>Tool & Tier</th>
+        <th id="unitsHeader" style="display:none;">Units</th>
         <th>Monthly Cost</th>
         <th>Yearly Cost</th>
         <th></th>
       </tr>
     </thead>
     <tbody id="pricingTableBody"></tbody>
+    <tfoot id="pricingTableFooter"></tfoot>
   </table>
 
   <script>
     let tools = [];
+    let mode = "comparison"; // or "projection"
 
     const quantityCountInput = document.getElementById("quantityCount");
     const discountInput = document.getElementById("discount");
@@ -72,7 +79,11 @@
       const tool = document.getElementById("toolInput").value.trim();
       const basePrice = parseFloat(document.getElementById("basePriceInput").value);
       if (!tool || isNaN(basePrice)) return;
-      tools.push({ tool, basePrice });
+      if (mode === "projection") {
+        tools.push({ tool, basePrice, units: 1 });
+      } else {
+        tools.push({ tool, basePrice });
+      }
       renderTable();
       updateURL();
     }
@@ -86,20 +97,49 @@
     function renderTable() {
       const quantityCount = parseInt(quantityCountInput.value);
       const discount = parseInt(discountInput.value);
-
+      let totalMonthly = 0;
+      let totalYearly = 0;
+      // Show/hide units column header
+      document.getElementById("unitsHeader").style.display = mode === "projection" ? "table-cell" : "none";
       tableBody.innerHTML = tools.map((item, i) => {
         const discountedPrice = item.basePrice * (1 - discount / 100);
-        const monthlyCost = (discountedPrice * quantityCount).toFixed(2);
+        let units = mode === "projection" ? (item.units || 1) : quantityCount;
+        const monthlyCost = (discountedPrice * units).toFixed(2);
         const yearlyCost = (monthlyCost * 12).toFixed(2);
+        totalMonthly += parseFloat(monthlyCost);
+        totalYearly += parseFloat(yearlyCost);
+        let priceDisplay = discount === 0
+          ? `$${item.basePrice.toFixed(2)} per ${unitInput.value || "unit"}/month`
+          : `$${item.basePrice.toFixed(2)} → $${discountedPrice.toFixed(2)} per ${unitInput.value || "unit"}/month`;
         return `
           <tr>
-            <td>${item.tool} ($${item.basePrice.toFixed(2)} → $${discountedPrice.toFixed(2)} per ${unitInput.value || "unit"}/month)</td>
+            <td>${item.tool} (${priceDisplay})</td>
+            ${mode === "projection" ? `<td><input type="number" min="1" value="${units}" style="width:60px;" onchange="updateUnits(${i}, this.value)"></td>` : ""}
             <td>$${Number(monthlyCost).toLocaleString()}</td>
             <td>$${Number(yearlyCost).toLocaleString()}</td>
             <td><span class="remove-btn" onclick="removeRow(${i})">Remove</span></td>
           </tr>
         `;
       }).join("");
+      // Add total row in projection mode
+      document.getElementById("pricingTableFooter").innerHTML = mode === "projection" && tools.length ? `
+        <tr>
+          <td><strong>Total</strong></td>
+          <td></td>
+          <td><strong>$${totalMonthly.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</strong></td>
+          <td><strong>$${totalYearly.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</strong></td>
+          <td></td>
+        </tr>
+      ` : "";
+    }
+
+    function updateUnits(index, value) {
+      const v = parseInt(value);
+      if (!isNaN(v) && v > 0) {
+        tools[index].units = v;
+        renderTable();
+        updateURL();
+      }
     }
 
     function updateURL() {
@@ -107,7 +147,8 @@
         tools,
         quantity: quantityCountInput.value,
         discount: discountInput.value,
-        unit: unitInput.value
+        unit: unitInput.value,
+        mode
       };
       const encoded = btoa(encodeURIComponent(JSON.stringify(params)));
       history.replaceState(null, "", `?data=${encoded}`);
@@ -123,11 +164,36 @@
           if (decoded.quantity) quantityCountInput.value = decoded.quantity;
           if (decoded.discount) discountInput.value = decoded.discount;
           if (decoded.unit) unitInput.value = decoded.unit;
+          if (decoded.mode) mode = decoded.mode;
         } catch (e) { console.error("Error parsing data", e); }
       }
       updateLabels();
       renderTable();
+      updateModeUI();
     }
+
+    function updateModeUI() {
+      const globalControls = document.getElementById("globalControls");
+      const modeToggleBtn = document.getElementById("modeToggleBtn");
+      if (mode === "projection") {
+        globalControls.style.display = "none";
+        modeToggleBtn.textContent = "Switch to Comparison Mode";
+      } else {
+        globalControls.style.display = "flex";
+        modeToggleBtn.textContent = "Switch to Projection Mode";
+      }
+      renderTable();
+    }
+
+    document.getElementById("modeToggleBtn").addEventListener("click", () => {
+      mode = mode === "comparison" ? "projection" : "comparison";
+      // Add units to all tools if switching to projection
+      if (mode === "projection") {
+        tools = tools.map(t => ({ ...t, units: 1 }));
+      }
+      updateModeUI();
+      updateURL();
+    });
 
     quantityCountInput.addEventListener("input", () => { updateLabels(); renderTable(); updateURL(); });
     discountInput.addEventListener("input", () => { updateLabels(); renderTable(); updateURL(); });
